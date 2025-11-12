@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartRoadGuard - Team-GPT</title>
+
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer">
+
+    <style>
+        :root {
+            --primary-dark: #0a192f;
+            --primary: #112240;
+            --primary-light: #233554;
+            --secondary: #64ffda;
+            --secondary-light: #8affdf;
+            --text-primary: #e6f1ff;
+            --text-secondary: #a8b2d1;
+            --text-muted: #8892b0;
+            --danger: #ff5c5c;
+            --warning: #ffbd4a;
+            --success: #4caf50;
+            --info: #4dabf7;
+            --card-bg: rgba(17, 34, 64, 0.7);
+            --card-border: rgba(100, 255, 218, 0.1);
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            --radius: 12px;
+            --transition: all 0.3s ease;
+            --route-blue: #0d47a1;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        .app-container { display: flex; min-height: 100vh; position: relative; }
+
+        #llmAlertBox {
+            position: fixed;
+            top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(13, 71, 161, 0.98);
+            backdrop-filter: blur(12px);
+            border: 2px solid var(--secondary);
+            border-radius: 16px;
+            padding: 18px 32px;
+            max-width: 90%;
+            box-shadow: 0 12px 40px rgba(13, 71, 161, 0.7), 0 0 30px rgba(100, 255, 218, 0.4);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            gap: 16px;
+            animation: slideDown 0.5s ease-out;
+        }
+        #llmAlertBox i {
+            font-size: 32px;
+            color: var(--secondary);
+            animation: bellShake 1s infinite;
+        }
+        #alertMessage {
+            font-size: 19px;
+            font-weight: 600;
+            color: white;
+            letter-spacing: 0.5px;
+        }
+        
+        #hazardAlertBox {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 107, 107, 0.98);
+            backdrop-filter: blur(12px);
+            border: 2px solid #ff5c5c;
+            border-radius: 16px;
+            padding: 18px 25px;
+            max-width: 500px;
+            box-shadow: 0 12px 40px rgba(255, 92, 92, 0.7);
+            z-index: 9998;
+            display: none;
+            align-items: center;
+            gap: 15px;
+            animation: slideDown 0.5s ease-out;
+            text-align: center;
+        }
+        #hazardAlertBox i {
+            font-size: 28px;
+            color: white;
+            flex-shrink: 0;
+        }
+        #hazardAlertMessage {
+            font-size: 15px;
+            font-weight: 600;
+            color: white;
+            line-height: 1.4;
+        }
+        #hazardAlertMessage strong {
+            font-size: 17px;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        @keyframes slideDown {
+            from { transform: translateX(-50%) translateY(-100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+        @keyframes bellShake {
+            0%,100% { transform: rotate(0); }
+            10%,30%,50%,70%,90% { transform: rotate(-12deg); }
+            20%,40%,60%,80% { transform: rotate(12deg); }
+        }
+
+        .sidebar { width: 300px; background: var(--primary); padding: 30px 20px; box-shadow: var(--shadow); z-index: 10; }
+        .logo { display: flex; align-items: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid var(--primary-light); }
+        .logo-icon { font-size: 28px; color: var(--secondary); margin-right: 12px; }
+        .logo-text { font-size: 22px; font-weight: 700; background: linear-gradient(90deg, var(--secondary), var(--secondary-light)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-menu { list-style: none; flex-grow: 1; }
+        .nav-link { display: flex; align-items: center; padding: 14px 16px; color: var(--text-secondary); text-decoration: none; border-radius: var(--radius); transition: var(--transition); }
+        .nav-link i { margin-right: 12px; font-size: 18px; width: 24px; text-align: center; }
+        .nav-link:hover, .nav-link.active { background: var(--primary-light); color: var(--text-primary); }
+        .nav-link.active { color: var(--secondary); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .user-profile { display: flex; align-items: center; padding: 16px 12px; border-top: 1px solid var(--primary-light); margin-top: 20px; }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--secondary); display: flex; align-items: center; justify-content: center; margin-right: 12px; color: var(--primary-dark); font-weight: bold; }
+        .main-content { flex-grow: 1; padding: 30px; padding-top: 120px; overflow-y: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .page-title { font-size: 28px; font-weight: 700; }
+        .page-subtitle { color: var(--text-muted); margin-top: 8px; }
+        .btn { padding: 12px 24px; border: none; border-radius: var(--radius); font-weight: 600; cursor: pointer; transition: var(--transition); display: inline-flex; align-items: center; justify-content: center; }
+        .btn i { margin-right: 8px; }
+        .btn-primary { background: var(--secondary); color: var(--primary-dark); }
+        .btn-primary:hover { background: var(--secondary-light); transform: translateY(-2px); }
+        .btn-secondary { background: var(--primary-light); color: var(--text-primary); }
+        .card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 30px; overflow: hidden; border: 1px solid var(--card-border); }
+        .card:hover { transform: translateY(-5px); }
+        .card-header { padding: 20px 30px; border-bottom: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center; }
+        .card-title { font-size: 20px; font-weight: 600; display: flex; align-items: center; }
+        .card-title i { margin-right: 10px; color: var(--secondary); }
+        .card-body { padding: 30px; }
+        #map { height: 500px; border-radius: var(--radius); margin-bottom: 30px; }
+        .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .status-item { background: var(--primary-light); padding: 20px; border-radius: var(--radius); text-align: center; border: 1px solid var(--card-border); }
+        .status-value { font-size: 24px; font-weight: 700; color: var(--secondary); }
+        .status-label { color: var(--text-muted); font-size: 14px; }
+        .alert-list { max-height: 400px; overflow-y: auto; }
+        .alert-item { background: var(--primary-light); padding: 15px; border-radius: var(--radius); margin-bottom: 10px; border-left: 4px solid; }
+        .alert-item.own { border-left-color: var(--secondary); }
+        .alert-item.external { border-left-color: var(--info); }
+        input, button { width: 100%; padding: 14px; margin: 10px 0; border-radius: var(--radius); border: 1px solid var(--primary-light); background: var(--primary); color: var(--text-primary); font-size: 16px; }
+        button:disabled { background: #334466; cursor: not-allowed; }
+        .success { color: var(--success); }
+        .error { color: var(--danger); }
+        @media (max-width: 992px) {
+            .app-container { flex-direction: column; }
+            .sidebar { width: 100%; }
+            .main-content { padding-top: 140px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="llmAlertBox">
+        <i class="fas fa-bell"></i>
+        <div id="alertMessage">Pothole ahead in 180 meters. Reduce speed to 30 km/h.</div>
+    </div>
+
+    <div id="hazardAlertBox">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div id="hazardAlertMessage">New hazard detected on your route!</div>
+    </div>
+
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><i class="fas fa-shield-alt"></i></div>
+                <div class="logo-text">SmartRoadGuard</div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#" class="nav-link active"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="#" class="nav-link"><i class="fas fa-route"></i> Route Planning</a></li>
+                <li><a href="#" class="nav-link"><i class="fas fa-car"></i> Journey Control</a></li>
+            </ul>
+            <div class="user-profile">
+                <div class="user-avatar">U1</div>
+                <div><div class="user-name">Driver 1</div><div class="user-role">Safe Driver</div></div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="header">
+                <div><h1 class="page-title">SmartRoadGuard</h1><p class="page-subtitle">Real-time AI hazard detection & sharing via CloudAMQP</p></div>
+                <div><button class="btn btn-secondary" onclick="clearHazards()"><i class="fas fa-trash"></i> Clear</button></div>
+            </div>
+
+            <div id="map"></div>
+
+            <div class="card">
+                <div class="card-header"><h2 class="card-title"><i class="fas fa-map-marked-alt"></i> Plan Route</h2></div>
+                <div class="card-body">
+                    <input type="text" id="start_place" placeholder="Start (click map or type)">
+                    <input type="text" id="end_place" placeholder="End (click map or type)">
+                    <button class="btn btn-primary" onclick="planRoute()">Plan Route</button>
+                    <small style="color:#8892b0;">Click map: First click = Start, Second click = End</small>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h2 class="card-title"><i class="fas fa-play-circle"></i> Journey Control</h2></div>
+                <div class="card-body">
+                    <button id="startBtn" class="btn btn-success" onclick="startJourney()" disabled>Start Journey</button>
+                    <button id="endBtn" class="btn btn-danger" onclick="endJourney()" disabled>End Journey</button>
+                </div>
+            </div>
+
+            <div class="status-grid">
+                <div class="status-item"><div class="status-value" id="journey">Ready</div><div class="status-label">Journey</div></div>
+                <div class="status-item"><div class="status-value" id="amqp">...</div><div class="status-label">CloudAMQP</div></div>
+                <div class="status-item"><div class="status-value" id="veh">-</div><div class="status-label">Vehicle</div></div>
+                <div class="status-item"><div class="status-value" id="det">0</div><div class="status-label">Detected</div></div>
+                <div class="status-item"><div class="status-value" id="ext">0</div><div class="status-label">Shared</div></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h2 class="card-title"><i class="fas fa-bell"></i> Live Hazard Alerts</h2></div>
+                <div class="card-body"><div class="alert-list" id="list">Plan a route and start journey...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js" 
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <script>
+        let map, routeLine, startMarker, endMarker, hazardMarkers = [];
+        let lastAlertId = null;
+        let pickMode = 'start'; // 'start' or 'end'
+        let alertedHazardIds = new Set();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            map = L.map('map').setView([12.9716, 77.5946], 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            // CLICK TO PICK START / END
+            map.on('click', function(e) {
+                const lat = e.latlng.lat.toFixed(6);
+                const lng = e.latlng.lng.toFixed(6);
+                if (pickMode === 'start') {
+                    document.getElementById('start_place').value = `${lat}, ${lng}`;
+                    if (startMarker) startMarker.remove();
+                    startMarker = L.marker(e.latlng, {icon: L.divIcon({html:'Start', className:'label', iconSize:[60,30]})}).addTo(map);
+                    pickMode = 'end';
+                } else {
+                    document.getElementById('end_place').value = `${lat}, ${lng}`;
+                    if (endMarker) endMarker.remove();
+                    endMarker = L.marker(e.latlng, {icon: L.divIcon({html:'End', className:'label', iconSize:[60,30]})}).addTo(map);
+                    pickMode = 'start';
+                }
+            });
+
+            setInterval(updateAll, 3000);
+            updateAll();
+        });
+
+        async function geocode(q) {
+            const r = await fetch('/geocode', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q})});
+            const d = await r.json();
+            if(d.success) return {lat:d.lat, lon:d.lon};
+            throw new Error(d.message || 'Not found');
+        }
+
+        async function planRoute() {
+            let startText = document.getElementById('start_place').value.trim();
+            let endText = document.getElementById('end_place').value.trim();
+            if(!startText || !endText) return alert('Enter or click both locations');
+
+            try {
+                let start, end;
+                if (startText.includes(',')) {
+                    const [lat, lon] = startText.split(',').map(parseFloat);
+                    start = {lat, lon};
+                } else {
+                    start = await geocode(startText);
+                }
+                if (endText.includes(',')) {
+                    const [lat, lon] = endText.split(',').map(parseFloat);
+                    end = {lat, lon};
+                } else {
+                    end = await geocode(endText);
+                }
+
+                const resp = await fetch('/plan_route', {method:'POST',headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({start_lat:start.lat,start_lon:start.lon,end_lat:end.lat,end_lon:end.lon})});
+                const data = await resp.json();
+                if(data.success) {
+                    drawRoute(data.route.coordinates);
+                    document.getElementById('startBtn').disabled = false;
+                }
+            } catch(err) { alert(err.message); }
+        }
+
+        function drawRoute(coords) {
+            const latlngs = coords.map(p=>[p.lat, p.lon]);
+            if(routeLine) routeLine.remove();
+            routeLine = L.polyline(latlngs, {color: '#0d47a1', weight: 7, opacity: 0.95}).addTo(map);
+            map.fitBounds(routeLine.getBounds());
+        }
+
+        function startJourney() { fetch('/start_journey',{method:'POST'}).then(()=>{ document.getElementById('startBtn').disabled=true; document.getElementById('endBtn').disabled=false; updateAll(); }); }
+        function endJourney() { fetch('/end_journey',{method:'POST'}).then(()=>{ document.getElementById('startBtn').disabled=false; document.getElementById('endBtn').disabled=true; updateAll(); }); }
+        function clearHazards() { fetch('/clear_hazards',{method:'POST'}).then(updateAll); }
+
+        function updateHazards(hazards) {
+            hazardMarkers.forEach(m => m.remove());
+            hazardMarkers = [];
+            const list = document.getElementById('list');
+            
+            if (!hazards || hazards.length === 0) {
+                list.innerHTML = '<i style="color:#8892b0;">No hazards detected yet.</i>';
+                return;
+            }
+            
+            // Limit to maximum 10 hazards
+            const limitedHazards = hazards.slice(0, 10);
+            
+            let html = '';
+            let newHazardDetected = false;
+            
+            limitedHazards.forEach(h => {
+                if (!h.lat || !h.lon) return;
+                
+                const isOwn = h.reported_by && h.reported_by.includes(document.getElementById('veh').textContent);
+                const color = h.type === 'pothole' ? 'orange' : h.type === 'stalled_vehicle' ? 'red' : 'blue';
+                const iconUrl = `https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-${color}.png`;
+                const shadowUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png';
+                
+                const marker = L.marker([h.lat, h.lon], {
+                    icon: L.icon({ 
+                        iconUrl, 
+                        shadowUrl, 
+                        iconSize: [25, 41], 
+                        iconAnchor: [12, 41], 
+                        popupAnchor: [1, -34], 
+                        shadowSize: [41, 41] 
+                    })
+                }).addTo(map);
+                
+                // Generate instruction text based on hazard type and severity
+                const instruction = generateHazardInstruction(h);
+                
+                marker.bindPopup(`
+                    <b>${h.type.replace('_', ' ').toUpperCase()}</b><br>
+                    Severity: ${h.severity}/10<br>
+                    Confidence: ${(h.confidence * 100).toFixed(0)}%<br>
+                    Reported by: ${h.reported_by || 'Unknown'}<br>
+                    Time: ${new Date(h.timestamp).toLocaleTimeString()}<br>
+                    <b>Instruction:</b> ${instruction}
+                `);
+                hazardMarkers.push(marker);
+                
+                const alertClass = isOwn ? 'alert-item own' : 'alert-item external';
+                const source = isOwn ? 'You' : h.reported_by || 'Other vehicle';
+                html += `<div class="${alertClass}">
+                    <strong>${h.type.replace('_', ' ')} (Severity ${h.severity})</strong><br>
+                    From: ${source} | ${new Date(h.timestamp).toLocaleTimeString()}<br>
+                    <small><i>${instruction}</i></small>
+                </div>`;
+                
+                // Show alert for new external hazards
+                const hazardId = h.id || `${h.lat}-${h.lon}-${h.type}`;
+                if (!isOwn && !alertedHazardIds.has(hazardId) && !newHazardDetected) {
+                    newHazardDetected = true;
+                    alertedHazardIds.add(hazardId);
+                    showHazardAlert(h, instruction);
+                }
+            });
+            
+            list.innerHTML = html;
+            
+            // Show warning if more than 10 hazards were filtered
+            if (hazards.length > 10) {
+                html += `<div class="alert-item external" style="border-left-color: var(--warning);">
+                    <strong>+${hazards.length - 10} more hazards</strong><br>
+                    <small>Only showing first 10 hazards</small>
+                </div>`;
+                list.innerHTML = html;
+            }
+        }
+
+        function generateHazardInstruction(hazard) {
+            const type = hazard.type;
+            const severity = hazard.severity;
+            
+            switch(type) {
+                case 'pothole':
+                    if (severity >= 8) {
+                        return "Severe pothole! Reduce speed to 20 km/h, change lane if possible, and avoid sudden braking.";
+                    } else if (severity >= 5) {
+                        return "Large pothole detected. Reduce speed to 30 km/h and steer gently around it.";
+                    } else {
+                        return "Small pothole ahead. Maintain reduced speed and proceed with caution.";
+                    }
+                    
+                case 'stalled_vehicle':
+                    if (severity >= 7) {
+                        return "Emergency! Stalled vehicle blocking lane. Reduce speed to 20 km/h and change lanes immediately.";
+                    } else {
+                        return "Stalled vehicle on roadside. Reduce speed to 40 km/h and maintain safe distance.";
+                    }
+                    
+                case 'debris':
+                    if (severity >= 6) {
+                        return "Large debris on road! Reduce speed to 25 km/h and navigate carefully around obstruction.";
+                    } else {
+                        return "Debris on road. Reduce speed to 35 km/h and avoid if possible.";
+                    }
+                    
+                default:
+                    return "Road hazard detected. Reduce speed and proceed with caution.";
+            }
+        }
+
+        function showHazardAlert(hazard, instruction) {
+            const box = document.getElementById('hazardAlertBox');
+            const message = document.getElementById('hazardAlertMessage');
+            
+            const hazardType = hazard.type.replace('_', ' ');
+            message.innerHTML = `
+                <strong>${hazardType.toUpperCase()} DETECTED</strong><br>
+                <small>${instruction}</small>
+            `;
+            
+            box.style.display = 'flex';
+            clearTimeout(box.hideTimeout);
+            box.hideTimeout = setTimeout(() => { 
+                box.style.display = 'none'; 
+            }, 7000); // Show for 7 seconds to read instructions
+            
+            // Also speak the instruction
+            const utterance = new SpeechSynthesisUtterance(instruction);
+            utterance.rate = 0.9;
+            utterance.pitch = 1.0;
+            utterance.volume = 0.8;
+            speechSynthesis.speak(utterance);
+        }
+
+        function updateStatus(data) {
+            document.getElementById('journey').innerHTML = data.journey_started ? '<span class="success">ACTIVE</span>' : 'Ready';
+            document.getElementById('amqp').innerHTML = data.amqp_connected ? '<span class="success">Connected</span>' : '<span class="error">Disconnected</span>';
+            document.getElementById('veh').textContent = data.vehicle_id || '-';
+            document.getElementById('det').textContent = data.detected_hazards_count || 0;
+            document.getElementById('ext').textContent = data.external_hazards_count || 0;
+        }
+
+        async function checkForAlert() {
+            try {
+                const resp = await fetch('/get_alert');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                let alert = data && typeof data === 'object' ? (data.alert || data) : null;
+                if (alert && alert.short_alert && alert.voice_text && alert.id !== lastAlertId) {
+                    lastAlertId = alert.id;
+                    const box = document.getElementById('llmAlertBox');
+                    document.getElementById('alertMessage').innerText = alert.short_alert;
+                    box.style.display = 'flex';
+                    clearTimeout(box.hideTimeout);
+                    box.hideTimeout = setTimeout(() => { box.style.display = 'none'; }, 10000);
+                    const utterance = new SpeechSynthesisUtterance(alert.voice_text);
+                    utterance.rate = 0.9; utterance.pitch = 1.1; utterance.volume = 1.0;
+                    speechSynthesis.cancel(); speechSynthesis.speak(utterance);
+                }
+            } catch (e) {}
+        }
+
+        async function updateAll() {
+            try {
+                await Promise.all([
+                    fetch('/get_hazards').then(r => r.ok ? r.json() : []),
+                    fetch('/get_status').then(r => r.ok ? r.json() : {})
+                ]).then(([hazards, status]) => {
+                    updateHazards(hazards);
+                    updateStatus(status);
+                    checkForAlert();
+                });
+            } catch (e) {}
+        }
+    </script>
+</body>
+</html>
